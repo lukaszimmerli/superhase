@@ -125,6 +125,7 @@
   <div class="game-over-overlay" id="game-over">
     <div class="game-over-title">Spiel vorbei!</div>
     <div class="game-over-score" id="game-over-score"></div>
+    <div class="game-over-score" id="game-over-highscore" style="font-weight:bold;color:#e85d75;"></div>
     <button class="btn btn-primary" onclick="restartGame()">Nochmal!</button>
     <button class="btn btn-secondary" onclick="quitGame()">Zurück zum Menü</button>
   </div>
@@ -267,6 +268,28 @@ document.getElementById('title-avatar-right').src=[IMG_LUCKY,IMG_HOPPEL,IMG_HOPP
 let selectedAvatarIndex=-1,currentGame=null,gameLoop=null;
 let canvas,ctx,W,H,score=0,lives=3,bestScore=0,gameActive=false,keys={};
 
+// ========== HIGH SCORES (JSONBin.io) ==========
+const JSONBIN_ID='69c00037aa77b81da90a5f2a';
+const JSONBIN_KEY='$2a$10$7Xt9pHyu57rQPHVvEmBIfesILsvBDpiA0bOrtimgRAst0DqOO1VnS';
+let highScores={flying:0,platformer:0};
+
+async function fetchHighScores(){
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+JSONBIN_ID+'/latest',{headers:{'X-Access-Key':JSONBIN_KEY}});
+    const d=await r.json();
+    if(d.record)highScores=d.record;
+  }catch(e){console.warn('High score fetch failed:',e);}
+}
+async function submitHighScore(mode,s){
+  if(s<=highScores[mode])return false;
+  highScores[mode]=s;
+  try{
+    await fetch('https://api.jsonbin.io/v3/b/'+JSONBIN_ID,{method:'PUT',headers:{'Content-Type':'application/json','X-Access-Key':JSONBIN_KEY},body:JSON.stringify(highScores)});
+  }catch(e){console.warn('High score submit failed:',e);}
+  return true;
+}
+fetchHighScores();
+
 const avatars=[
   {name:'Lucky',src:IMG_LUCKY,customImg:null},{name:'Hoppel',src:IMG_HOPPEL,customImg:null},
   {name:'Hoppi',src:IMG_HOPPI,customImg:null},{name:'Mia',src:IMG_MIA,customImg:null},
@@ -332,11 +355,11 @@ window.addEventListener('resize',()=>{if(gameActive)resizeCanvas();});
 // ========== ENGINE ==========
 let lostEggParticles=[];
 
-function startGame(type){audioInitDone=true;document.removeEventListener('touchstart',initAudioOnce);document.removeEventListener('click',initAudioOnce);initSounds();stopMusic();playMusic('gamemusic',0.2);currentGame=type;showScreen('game-screen');resizeCanvas();score=0;lives=3;bestScore=0;gameActive=true;lostEggParticles=[];updateHUD();document.getElementById('game-over').classList.remove('active');if(type==='flying')initFlyingGame();else initPlatformerGame();}
+function startGame(type){audioInitDone=true;document.removeEventListener('touchstart',initAudioOnce);document.removeEventListener('click',initAudioOnce);initSounds();stopMusic();playMusic('gamemusic',0.2);fetchHighScores();currentGame=type;showScreen('game-screen');resizeCanvas();score=0;lives=3;bestScore=0;gameActive=true;lostEggParticles=[];updateHUD();document.getElementById('game-over').classList.remove('active');if(type==='flying')initFlyingGame();else initPlatformerGame();}
 function updateHUD(){document.getElementById('hud-score').textContent='🥚 '+score;document.getElementById('hud-lives').textContent='❤️ '+lives;}
 function quitGame(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);stopMusic();playMusic('menumusic',0.25);showScreen('gameselect-screen');}
 function restartGame(){document.getElementById('game-over').classList.remove('active');stopMusic();startGame(currentGame);}
-function gameOver(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);document.getElementById('game-over-score').textContent='Du hast '+bestScore+' Eier gesammelt! 🥚';document.getElementById('game-over').classList.add('active');}
+async function gameOver(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);document.getElementById('game-over-score').textContent='Du hast '+bestScore+' Eier gesammelt! 🥚';const hsEl=document.getElementById('game-over-highscore');const isNew=await submitHighScore(currentGame,bestScore);if(isNew){hsEl.textContent='⭐ Neuer Highscore! ⭐';}else{hsEl.textContent='Highscore: '+highScores[currentGame]+' 🥚';}document.getElementById('game-over').classList.add('active');}
 
 function getAvatarImg(){const av=avatars[selectedAvatarIndex];if(av.customImg)return av.customImg;return imgCache[['lucky','hoppel','hoppi','mia'][selectedAvatarIndex]];}
 
