@@ -291,7 +291,7 @@ async function fetchHighScores(){
   try{
     const r=await fetch('https://api.jsonbin.io/v3/b/'+JSONBIN_ID+'/latest',{headers:{'X-Access-Key':JSONBIN_KEY}});
     const d=await r.json();
-    if(d.record)highScores=d.record;
+    if(d.record)highScores=Object.assign(highScores,d.record);
   }catch(e){console.warn('High score fetch failed:',e);}
 }
 async function submitHighScore(mode,s){
