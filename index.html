@@ -428,6 +428,9 @@ document.addEventListener('keyup',e=>keys[e.key]=false);
 function resetAllTouchFlags(){flyTouchUp=false;flyTouchDown=false;platTouchL=false;platTouchR=false;platTouchJ=false;platTouchP=false;ehTouchU=false;ehTouchD=false;ehTouchL=false;ehTouchR=false;ehTouchP=false;}
 document.addEventListener('visibilitychange',()=>{if(document.hidden){resetAllTouchFlags();keys={};}});
 window.addEventListener('blur',()=>{resetAllTouchFlags();keys={};});
+// iPad safety: if all touches end globally, clear all flags
+document.addEventListener('touchend',e=>{if(e.touches.length===0)resetAllTouchFlags();},{passive:true});
+document.addEventListener('touchcancel',e=>{if(e.touches.length===0)resetAllTouchFlags();},{passive:true});
 function wobble(seed){return(Math.sin(seed*127.1+seed*311.7)*0.5)*2.5;}
 
 // ====================================================================
@@ -440,7 +443,7 @@ function initFlyingGame(){
   const tc=document.getElementById('touch-controls');
   tc.innerHTML='<div class="touch-left-group"><button class="touch-btn" id="btn-flydown">▼</button></div><div class="touch-right-group"><button class="touch-btn" id="btn-flyup">▲</button></div>';
   flyTouchUp=false;flyTouchDown=false;
-  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sfF(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('mousedown',()=>sfF(flag,true));el.addEventListener('mouseup',()=>sfF(flag,false));};
+  const wire=(id,flag)=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('touchstart',e=>{e.preventDefault();sfF(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('pointerup',()=>sfF(flag,false));el.addEventListener('pointerleave',()=>sfF(flag,false));el.addEventListener('mousedown',()=>sfF(flag,true));el.addEventListener('mouseup',()=>sfF(flag,false));};
   function sfF(f,v){if(f==='U')flyTouchUp=v;if(f==='D')flyTouchDown=v;}
   wire('btn-flyup','U');wire('btn-flydown','D');
   flyPlayer={x:W*0.12,y:H*0.4,w:80,h:95,vy:0};
@@ -504,7 +507,7 @@ function initPlatformerGame(){
   const tc=document.getElementById('touch-controls');
   tc.innerHTML='<div class="touch-left-group"><button class="touch-btn" id="btn-left">◀</button><button class="touch-btn" id="btn-right">▶</button></div><div class="touch-right-group"><button class="touch-btn" id="btn-punch" style="background:rgba(255,143,171,0.45);">👊</button><button class="touch-btn" id="btn-jump" style="background:rgba(126,203,139,0.45);">▲</button></div>';
   platTouchL=false;platTouchR=false;platTouchJ=false;platTouchP=false;
-  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sf(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('mousedown',()=>sf(flag,true));el.addEventListener('mouseup',()=>sf(flag,false));};
+  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sf(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('pointerup',()=>sf(flag,false));el.addEventListener('pointerleave',()=>sf(flag,false));el.addEventListener('mousedown',()=>sf(flag,true));el.addEventListener('mouseup',()=>sf(flag,false));};
   function sf(f,v){if(f==='L')platTouchL=v;if(f==='R')platTouchR=v;if(f==='J')platTouchJ=v;if(f==='P')platTouchP=v;}
   wire('btn-left','L');wire('btn-right','R');wire('btn-jump','J');wire('btn-punch','P');
   platCamX=0;platSpawnX=0;lostEggParticles=[];
@@ -626,7 +629,7 @@ function initEggHuntGame(){
   tc.innerHTML='<div class="touch-left-group"><button class="touch-btn" id="btn-eh-left">◀</button><button class="touch-btn" id="btn-eh-right">▶</button></div><div class="touch-right-group"><button class="touch-btn" id="btn-eh-punch" style="background:rgba(255,143,171,0.45);">👊</button><div style="display:flex;flex-direction:column;gap:8px;"><button class="touch-btn" id="btn-eh-up">▲</button><button class="touch-btn" id="btn-eh-down">▼</button></div></div>';
   ehTouchU=false;ehTouchD=false;ehTouchL=false;ehTouchR=false;ehTouchP=false;
   function sef(f,v){if(f==='U')ehTouchU=v;if(f==='D')ehTouchD=v;if(f==='L')ehTouchL=v;if(f==='R')ehTouchR=v;if(f==='P')ehTouchP=v;}
-  const wire=(id,flag)=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('touchstart',e=>{e.preventDefault();sef(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sef(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sef(flag,false);});el.addEventListener('mousedown',()=>sef(flag,true));el.addEventListener('mouseup',()=>sef(flag,false));};
+  const wire=(id,flag)=>{const el=document.getElementById(id);if(!el)return;el.addEventListener('touchstart',e=>{e.preventDefault();sef(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sef(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sef(flag,false);});el.addEventListener('pointerup',()=>sef(flag,false));el.addEventListener('pointerleave',()=>sef(flag,false));el.addEventListener('mousedown',()=>sef(flag,true));el.addEventListener('mouseup',()=>sef(flag,false));};
   wire('btn-eh-up','U');wire('btn-eh-down','D');wire('btn-eh-left','L');wire('btn-eh-right','R');wire('btn-eh-punch','P');
 
   const mapPxW=EH_MAP_W*EH_TILE,mapPxH=EH_MAP_H*EH_TILE;
