@@ -110,7 +110,7 @@
     </div>
     <div class="game-card" onclick="startGame('platformer')">
       <div class="game-card-icon">👊</div>
-      <div class="game-card-info"><h3>Eier-Boxer</h3><p>Lauf, spring & box Eier! Box Monster für ein Extra-Leben!</p></div>
+      <div class="game-card-info"><h3>Eier-Boxer</h3><p>Lauf, spring & box Eier! Box Monster für Bonus-Zeit!</p></div>
     </div>
   </div>
   <button class="btn btn-secondary" onclick="showScreen('avatar-screen')" style="margin-top:10px;font-size:1rem;z-index:1;">← Held wechseln</button>
@@ -118,12 +118,12 @@
 
 <div id="game-screen" class="screen">
   <canvas id="game-canvas"></canvas>
-  <div class="game-hud"><div class="hud-score" id="hud-score">🥚 0</div><div style="display:flex;gap:8px;"><div class="hud-score" id="hud-lives">❤️ 3</div><button class="hud-btn" onclick="quitGame()">✕ Beenden</button></div></div>
+  <div class="game-hud"><div class="hud-score" id="hud-score">🥚 0</div><div style="display:flex;gap:8px;"><div class="hud-score" id="hud-timer">⏱️ 3:00</div><button class="hud-btn" onclick="quitGame()">✕ Beenden</button></div></div>
   <div class="touch-controls" id="touch-controls"></div>
   <div class="hit-flash" id="hit-flash"></div>
   <div class="life-flash" id="life-flash"></div>
   <div class="game-over-overlay" id="game-over">
-    <div class="game-over-title">Spiel vorbei!</div>
+    <div class="game-over-title">Zeit abgelaufen!</div>
     <div class="game-over-score" id="game-over-score"></div>
     <div class="game-over-score" id="game-over-highscore" style="font-weight:bold;color:#e85d75;"></div>
     <button class="btn btn-primary" onclick="restartGame()">Nochmal!</button>
@@ -266,7 +266,9 @@ document.getElementById('title-avatar-right').src=[IMG_LUCKY,IMG_HOPPEL,IMG_HOPP
 
 // ========== GLOBALS ==========
 let selectedAvatarIndex=-1,currentGame=null,gameLoop=null;
-let canvas,ctx,W,H,score=0,lives=3,bestScore=0,gameActive=false,keys={};
+const GAME_TIME=60;
+let canvas,ctx,W,H,score=0,timeLeft=GAME_TIME,lastTimestamp=0,gameActive=false,keys={};
+function difficulty(){return Math.min(1,(GAME_TIME-timeLeft)/GAME_TIME);}
 
 // ========== HIGH SCORES (JSONBin.io) ==========
 const JSONBIN_ID='69c00037aa77b81da90a5f2a';
@@ -355,11 +357,11 @@ window.addEventListener('resize',()=>{if(gameActive)resizeCanvas();});
 // ========== ENGINE ==========
 let lostEggParticles=[];
 
-function startGame(type){audioInitDone=true;document.removeEventListener('touchstart',initAudioOnce);document.removeEventListener('click',initAudioOnce);initSounds();stopMusic();playMusic('gamemusic',0.2);fetchHighScores();currentGame=type;showScreen('game-screen');resizeCanvas();score=0;lives=3;bestScore=0;gameActive=true;lostEggParticles=[];updateHUD();document.getElementById('game-over').classList.remove('active');if(type==='flying')initFlyingGame();else initPlatformerGame();}
-function updateHUD(){document.getElementById('hud-score').textContent='🥚 '+score;document.getElementById('hud-lives').textContent='❤️ '+lives;}
+function startGame(type){audioInitDone=true;document.removeEventListener('touchstart',initAudioOnce);document.removeEventListener('click',initAudioOnce);initSounds();stopMusic();playMusic('gamemusic',0.2);fetchHighScores();currentGame=type;showScreen('game-screen');resizeCanvas();score=0;timeLeft=GAME_TIME;lastTimestamp=0;gameActive=true;lostEggParticles=[];updateHUD();document.getElementById('game-over').classList.remove('active');if(type==='flying')initFlyingGame();else initPlatformerGame();}
+function updateHUD(){document.getElementById('hud-score').textContent='🥚 '+score;const m=Math.floor(Math.max(0,timeLeft)/60);const s=Math.floor(Math.max(0,timeLeft)%60);document.getElementById('hud-timer').textContent='⏱️ '+m+':'+String(s).padStart(2,'0');document.getElementById('hud-timer').style.color=timeLeft<=30?'#FF6B6B':'';}
 function quitGame(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);stopMusic();playMusic('menumusic',0.25);showScreen('gameselect-screen');}
 function restartGame(){document.getElementById('game-over').classList.remove('active');stopMusic();startGame(currentGame);}
-async function gameOver(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);document.getElementById('game-over-score').textContent='Du hast '+bestScore+' Eier gesammelt! 🥚';const hsEl=document.getElementById('game-over-highscore');const isNew=await submitHighScore(currentGame,bestScore);if(isNew){hsEl.textContent='⭐ Neuer Highscore! ⭐';}else{hsEl.textContent='Highscore: '+highScores[currentGame]+' 🥚';}document.getElementById('game-over').classList.add('active');}
+async function gameOver(){gameActive=false;if(gameLoop)cancelAnimationFrame(gameLoop);document.getElementById('game-over-score').textContent='Du hast '+score+' Eier gesammelt! 🥚';const hsEl=document.getElementById('game-over-highscore');const isNew=await submitHighScore(currentGame,score);if(isNew){hsEl.textContent='⭐ Neuer Highscore! ⭐';}else{hsEl.textContent='Highscore: '+highScores[currentGame]+' 🥚';}document.getElementById('game-over').classList.add('active');}
 
 function getAvatarImg(){const av=avatars[selectedAvatarIndex];if(av.customImg)return av.customImg;return imgCache[['lucky','hoppel','hoppi','mia'][selectedAvatarIndex]];}
 
@@ -402,16 +404,18 @@ function updateAndDrawLostEggs(){
 }
 
 function playerHitByMonster(px,py){
-  lives--;const lost=score;bestScore=Math.max(bestScore,score);
-  spawnEggLossParticles(px||W/2,py||H/2,lost);
-  score=0;updateHUD();flashHit();
+  const lost=score;  spawnEggLossParticles(px||W/2,py||H/2,lost);
+  score=0;timeLeft=Math.max(0,timeLeft-10);updateHUD();flashHit();
   playSound('lose',0.6);
-  if(lives<=0)gameOver();
 }
-function playerPunchMonster(){playSound('punch',0.7);lives++;score+=2;bestScore=Math.max(bestScore,score);updateHUD();flashLife();}
+function playerPunchMonster(){playSound('punch',0.7);timeLeft+=5;score+=2;updateHUD();flashLife();}
+function tickTimer(timestamp){if(!lastTimestamp){lastTimestamp=timestamp;return;}const dt=(timestamp-lastTimestamp)/1000;lastTimestamp=timestamp;timeLeft-=dt;updateHUD();if(timeLeft<=0){timeLeft=0;updateHUD();gameOver();}}
 
 document.addEventListener('keydown',e=>keys[e.key]=true);
 document.addEventListener('keyup',e=>keys[e.key]=false);
+function resetAllTouchFlags(){flyTouchUp=false;flyTouchDown=false;platTouchL=false;platTouchR=false;platTouchJ=false;platTouchP=false;}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){resetAllTouchFlags();keys={};}});
+window.addEventListener('blur',()=>{resetAllTouchFlags();keys={};});
 function wobble(seed){return(Math.sin(seed*127.1+seed*311.7)*0.5)*2.5;}
 
 // ====================================================================
@@ -423,7 +427,8 @@ let flyTouchUp=false,flyTouchDown=false;
 function initFlyingGame(){
   const tc=document.getElementById('touch-controls');
   tc.innerHTML='<div class="touch-left-group"><button class="touch-btn" id="btn-flydown">▼</button></div><div class="touch-right-group"><button class="touch-btn" id="btn-flyup">▲</button></div>';
-  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sfF(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('mousedown',()=>sfF(flag,true));el.addEventListener('mouseup',()=>sfF(flag,false));};
+  flyTouchUp=false;flyTouchDown=false;
+  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sfF(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sfF(flag,false);});el.addEventListener('mousedown',()=>sfF(flag,true));el.addEventListener('mouseup',()=>sfF(flag,false));};
   function sfF(f,v){if(f==='U')flyTouchUp=v;if(f==='D')flyTouchDown=v;}
   wire('btn-flyup','U');wire('btn-flydown','D');
   flyPlayer={x:W*0.12,y:H*0.4,w:80,h:95,vy:0};
@@ -433,22 +438,24 @@ function initFlyingGame(){
   flyGameLoop();
 }
 
-function flyGameLoop(){
-  if(!gameActive)return;gameLoop=requestAnimationFrame(flyGameLoop);
-  const speed=3+Math.min(score*0.05,4),moveSpeed=4.5;
+function flyGameLoop(timestamp){
+  if(!gameActive)return;gameLoop=requestAnimationFrame(flyGameLoop);tickTimer(timestamp);
+  const d=difficulty(),speed=3+d*6,moveSpeed=4.5;
   let moveY=0;
   if(flyTouchUp||keys['ArrowUp']||keys['w']||keys[' '])moveY=-1;
   if(flyTouchDown||keys['ArrowDown']||keys['s'])moveY=1;
   flyPlayer.vy=moveY*moveSpeed;flyPlayer.y+=flyPlayer.vy;
   flyPlayer.y=Math.max(15,Math.min(H-flyPlayer.h-15,flyPlayer.y));
   flyBgOffset=(flyBgOffset+speed*0.3)%W;flySpawnTimer++;
-  if(flySpawnTimer%Math.max(38,65-score)===0)flyEggs.push({x:W+20,y:40+Math.random()*(H-100),r:22,eggType:Math.floor(Math.random()*4)});
-  if(flySpawnTimer%Math.max(75,125-score*2)===0)flyMonsters.push({x:W+20,y:30+Math.random()*(H-100),w:75,h:85,frame:0});
+  const eggInterval=Math.max(30,55-Math.floor(d*20));
+  const monsterInterval=Math.max(30,100-Math.floor(d*65));
+  if(flySpawnTimer%eggInterval===0)flyEggs.push({x:W+20,y:40+Math.random()*(H-100),r:22,eggType:Math.floor(Math.random()*4)});
+  if(flySpawnTimer%monsterInterval===0)flyMonsters.push({x:W+20,y:30+Math.random()*(H-100),w:75,h:85,frame:0});
   if(flySpawnTimer%120===0)flyClouds.push({x:W+100,y:40+Math.random()*(H-120),w:100+Math.random()*120,type:Math.floor(Math.random()*3),speed:0.3+Math.random()*0.7});
-  flyEggs.forEach(e=>e.x-=speed);flyMonsters.forEach(m=>{m.x-=speed*1.15;m.frame++;});flyClouds.forEach(c=>{c.x-=c.speed;});flyClouds=flyClouds.filter(c=>c.x+c.w>-50);
+  flyEggs.forEach(e=>e.x-=speed);flyMonsters.forEach(m=>{m.x-=speed*(1.15+d*0.4);m.frame++;});flyClouds.forEach(c=>{c.x-=c.speed;});flyClouds=flyClouds.filter(c=>c.x+c.w>-50);
 
   const px=flyPlayer.x,py=flyPlayer.y,pw=flyPlayer.w,ph=flyPlayer.h;
-  flyEggs=flyEggs.filter(e=>{if(e.x+e.r<0)return false;if(rectsOverlap(px,py,pw,ph,e.x-e.r,e.y-e.r,e.r*2,e.r*2)){score++;bestScore=Math.max(bestScore,score);updateHUD();playSound('pickup',0.5);return false;}return true;});
+  flyEggs=flyEggs.filter(e=>{if(e.x+e.r<0)return false;if(rectsOverlap(px,py,pw,ph,e.x-e.r,e.y-e.r,e.r*2,e.r*2)){score++;updateHUD();playSound('pickup',0.5);return false;}return true;});
   flyMonsters=flyMonsters.filter(m=>{if(m.x+m.w<0)return false;if(rectsOverlap(px+10,py+10,pw-20,ph-20,m.x+8,m.y+8,m.w-16,m.h-16)){playerHitByMonster(px+pw/2,py+ph/2);return false;}return true;});
 
   const skyGrad=ctx.createLinearGradient(0,0,0,H);
@@ -484,7 +491,8 @@ const MAX_JUMPS=3;
 function initPlatformerGame(){
   const tc=document.getElementById('touch-controls');
   tc.innerHTML='<div class="touch-left-group"><button class="touch-btn" id="btn-left">◀</button><button class="touch-btn" id="btn-right">▶</button></div><div class="touch-right-group"><button class="touch-btn" id="btn-punch" style="background:rgba(255,143,171,0.45);">👊</button><button class="touch-btn" id="btn-jump" style="background:rgba(126,203,139,0.45);">▲</button></div>';
-  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sf(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('mousedown',()=>sf(flag,true));el.addEventListener('mouseup',()=>sf(flag,false));};
+  platTouchL=false;platTouchR=false;platTouchJ=false;platTouchP=false;
+  const wire=(id,flag)=>{const el=document.getElementById(id);el.addEventListener('touchstart',e=>{e.preventDefault();sf(flag,true);});el.addEventListener('touchend',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('touchcancel',e=>{e.preventDefault();sf(flag,false);});el.addEventListener('mousedown',()=>sf(flag,true));el.addEventListener('mouseup',()=>sf(flag,false));};
   function sf(f,v){if(f==='L')platTouchL=v;if(f==='R')platTouchR=v;if(f==='J')platTouchJ=v;if(f==='P')platTouchP=v;}
   wire('btn-left','L');wire('btn-right','R');wire('btn-jump','J');wire('btn-punch','P');
   platCamX=0;platSpawnX=0;lostEggParticles=[];
@@ -498,13 +506,14 @@ function generatePlatforms(upToX){
     const pw=100+Math.random()*150,py=H-90-Math.random()*(H*0.45);
     platPlatforms.push({x:platSpawnX,y:py,w:pw,h:18,seed:Math.random()*999});
     if(Math.random()<0.6)platEggs.push({x:platSpawnX+pw/2,y:py-30,r:20,alive:true,eggType:Math.floor(Math.random()*4)});
-    if(Math.random()<0.35&&platSpawnX>300)platEnemies.push({x:platSpawnX+pw/2,y:py-75,w:60,h:70,alive:true,dir:1,originX:platSpawnX,rangeW:pw,frame:0});
+    const monsterChance=0.35+difficulty()*0.35;
+    if(Math.random()<monsterChance&&platSpawnX>300)platEnemies.push({x:platSpawnX+pw/2,y:py-75,w:60,h:70,alive:true,dir:1,originX:platSpawnX,rangeW:pw,frame:0});
     platSpawnX+=pw+60+Math.random()*100;
   }
 }
 
-function platGameLoop(){
-  if(!gameActive)return;gameLoop=requestAnimationFrame(platGameLoop);
+function platGameLoop(timestamp){
+  if(!gameActive)return;gameLoop=requestAnimationFrame(platGameLoop);tickTimer(timestamp);
   const p=platPlayer;let moveX=0;
   if(keys['ArrowLeft']||keys['a']||platTouchL){moveX=-1;p.facingRight=false;}
   if(keys['ArrowRight']||keys['d']||platTouchR){moveX=1;p.facingRight=true;}
@@ -529,8 +538,8 @@ function platGameLoop(){
 
   let punchBox=null;
   if(p.punching&&p.punchFrame<10){const ppx=p.facingRight?p.x+p.w:p.x-35;punchBox={x:ppx,y:p.y+10,w:35,h:40};}
-  platEggs.forEach(e=>{if(!e.alive)return;if(punchBox&&rectsOverlap(punchBox.x,punchBox.y,punchBox.w,punchBox.h,e.x-e.r,e.y-e.r,e.r*2,e.r*2)){e.alive=false;score++;bestScore=Math.max(bestScore,score);updateHUD();playSound('pickup',0.5);}});
-  platEnemies.forEach(en=>{if(!en.alive)return;en.frame++;en.x+=en.dir*1.2;if(en.x<en.originX||en.x>en.originX+en.rangeW-en.w)en.dir*=-1;
+  platEggs.forEach(e=>{if(!e.alive)return;if(punchBox&&rectsOverlap(punchBox.x,punchBox.y,punchBox.w,punchBox.h,e.x-e.r,e.y-e.r,e.r*2,e.r*2)){e.alive=false;score++;updateHUD();playSound('pickup',0.5);}});
+  platEnemies.forEach(en=>{if(!en.alive)return;en.frame++;en.x+=en.dir*(1.2+difficulty()*1.3);if(en.x<en.originX||en.x>en.originX+en.rangeW-en.w)en.dir*=-1;
     if(punchBox&&rectsOverlap(punchBox.x,punchBox.y,punchBox.w,punchBox.h,en.x,en.y,en.w,en.h)){en.alive=false;playerPunchMonster();return;}
     if(rectsOverlap(p.x+8,p.y+8,p.w-16,p.h-16,en.x+5,en.y+5,en.w-10,en.h-10)){en.alive=false;p.vy=-8;playerHitByMonster(p.x+p.w/2,p.y);}
   });
@@ -588,7 +597,7 @@ function platGameLoop(){
   }
   ctx.restore();
 
-  if(score===0&&lives===3&&bestScore===0){ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font=`${Math.min(18,W*0.032)}px "Coming Soon",cursive`;ctx.textAlign='center';ctx.fillText('✏️ 3x Springen möglich! Boxe Monster für Extra-Leben! ✏️',W/2,H*0.13);}
+  if(score===0&&timeLeft>=GAME_TIME-1){ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font=`${Math.min(18,W*0.032)}px "Coming Soon",cursive`;ctx.textAlign='center';ctx.fillText('✏️ 3x Springen möglich! Boxe Monster für Bonus-Zeit! ✏️',W/2,H*0.13);}
 }
 
 function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh){return ax<bx+bw&&ax+aw>bx&&ay<by+bh&&ay+ah>by;}
